@@ -4,9 +4,15 @@ import {Store} from '@ngrx/store';
 import {Observable} from 'rxjs/Observable';
 // app
 import {getNames, IAppState} from '../../modules/ngrx/index';
-import * as THREE from 'three/build/three';
 import * as Stats from 'stats.js/build/stats.min';
-import {List} from 'immutable/dist/immutable';
+import {List} from 'immutable';
+import {Frustum, Matrix4, PerspectiveCamera, Scene, WebGLRenderer} from 'three';
+import {Ship} from './classes/ship';
+import {Controls, Key, KeyName} from './classes/controls';
+import {Helpers} from './classes/helpers';
+import {Projectile} from './classes/projectile';
+import {RepeatingTimer} from './classes/repeating-timer';
+import {Boss} from './classes/boss';
 
 @Component({
   moduleId: module.id,
@@ -18,20 +24,15 @@ export class GameComponent implements OnInit {
   @ViewChild('canvas') canvas: ElementRef;
 
   names$: Observable<any>;
-  private renderer: THREE.WebGLRenderer;
+  private renderer: WebGLRenderer;
   private stats: Stats;
-  private scene: THREE.Scene;
-  private camera: THREE.PerspectiveCamera;
-  private ship: THREE.Mesh;
-  private boss: THREE.Mesh;
-  private shipSpeed: number;
-  private shipMoveVector: List<number>;
-
-  private static box(color: number, scale: [number, number, number], position: [number, number, number]) {
-    let mesh = new THREE.Mesh(new THREE.BoxGeometry(...scale), new THREE.MeshBasicMaterial({color: color}));
-    mesh.position.set(...position);
-    return mesh;
-  }
+  private scene: Scene;
+  private camera: PerspectiveCamera;
+  private ship: Ship;
+  private boss: Boss;
+  private controls: Controls;
+  private projectiles: List<Projectile>;
+  private frustum: Frustum;
 
   // TODO remove unused Angular components
   // TODO introduce Level class to handle scene setup and tearDown
@@ -61,28 +62,28 @@ export class GameComponent implements OnInit {
       this.camera.aspect = width / height;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(width, height);
+      this.frustum = new Frustum().setFromMatrix(new Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
     }
   }
 
   keyDown(event: KeyboardEvent) {
-    if (event.key === 'ArrowLeft' && this.shipMoveVector.last() !== -1) {
-      this.shipMoveVector = this.shipMoveVector.push(-1);
-    } else if (event.key === 'ArrowRight' && this.shipMoveVector.last() !== 1) {
-      this.shipMoveVector = this.shipMoveVector.push(1);
+    if (event.key === Key.ArrowLeft || event.key === Key.ArrowRight) {
+      if (event.key !== this.controls.keyboardInputs.last()) {
+        this.controls.keyboardInputs = this.controls.keyboardInputs.push(event.key);
+      }
     }
   }
 
   keyUp(event: KeyboardEvent) {
-    if (event.key === 'ArrowLeft') {
-      this.shipMoveVector = this.shipMoveVector.filter(e => e !== -1);
-    } else if (event.key === 'ArrowRight') {
-      this.shipMoveVector = this.shipMoveVector.filter(e => e !== 1);
+    if (event.key === Key.ArrowLeft || event.key === Key.ArrowRight) {
+      this.controls.keyboardInputs = List<KeyName>(this.controls.keyboardInputs.filterNot(e => e === event.key));
     }
   }
 
   private init() {
     this.initStats();
     this.initRenderer();
+    this.initControls();
     this.initScene();
     this.resize();
   }
@@ -94,7 +95,7 @@ export class GameComponent implements OnInit {
   }
 
   private initRenderer() {
-    this.renderer = new THREE.WebGLRenderer({
+    this.renderer = new WebGLRenderer({
       canvas: this.canvas.nativeElement,
       antialias: true,
     });
@@ -103,47 +104,72 @@ export class GameComponent implements OnInit {
   }
 
   private initScene() {
-    this.scene = new THREE.Scene();
+    this.scene = new Scene();
     this.initCamera();
     this.initShip();
     this.initBoss();
-    this.scene.add(this.ship, this.boss);
+    this.initProjectiles();
+    this.scene.add(this.ship.mesh, this.boss.mesh);
   }
 
   private initCamera() {
-    this.camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.1, 1000);
+    this.camera = new PerspectiveCamera(75, 16 / 9, 0.1, 1000);
     this.camera.position.z = 20;
     this.camera.lookAt(this.scene.position);
   }
 
   private initBoss() {
-    this.boss = GameComponent.box(0xb22323, [2, 2, 2], [0, 10, 0]);
+    this.boss = new Boss(Helpers.boxMesh(0xb22323, {x: 2, y: 2, z: 2}, {x: 0, y: 10, z: 0}));
+    new RepeatingTimer(100, () => {
+      let firedProjectile = this.boss.firedProjectile();
+      this.scene.add(firedProjectile.mesh);
+      this.projectiles = this.projectiles.push(firedProjectile);
+    }).start();
   }
 
   private initShip() {
-    this.ship = GameComponent.box(0x144091, [1, 1, 1], [0, -10, 0]);
-    this.shipSpeed = 0.1;
-    this.shipMoveVector = List<number>();
+    this.ship = new Ship(Helpers.boxMesh(0x144091, {x: 1, y: 1, z: 1}, {x: 0, y: -10, z: 0}), 0.3);
+    new RepeatingTimer(100, () => {
+      let firedProjectile = this.ship.firedProjectile();
+      this.scene.add(firedProjectile.mesh);
+      this.projectiles = this.projectiles.push(firedProjectile);
+    }).start();
+  }
+
+  private initControls() {
+    this.controls = new Controls(List());
+  }
+
+  private initProjectiles() {
+    this.projectiles = List<Projectile>();
   }
 
   private drawLoop() {
     this.stats.update();
     this.updateShip();
     this.updateBoss();
+    this.updateProjectiles();
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame(() => this.drawLoop());
   }
 
   private updateBoss() {
-    this.boss.rotation.x += 0.01;
-    this.boss.rotation.y += 0.01;
+    this.boss.mesh.rotation.x += 0.01;
+    this.boss.mesh.rotation.y += 0.01;
   }
 
   private updateShip() {
-    this.ship.rotation.x += 0.01;
-    this.ship.rotation.y += 0.01;
-    if (!this.shipMoveVector.isEmpty()) {
-      this.ship.position.x += this.shipMoveVector.last() * this.shipSpeed;
+    if (!this.controls.keyboardInputs.isEmpty()) {
+      this.ship.move(this.controls.currentDirection());
     }
+  }
+
+  private updateProjectiles() {
+    this.projectiles = this.projectiles
+      .map(p => {
+        p.move();
+        return p;
+      })
+      .filter(p => this.frustum.intersectsObject(p.mesh));
   }
 }

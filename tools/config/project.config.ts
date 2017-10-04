@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { SeedAdvancedConfig } from './seed-advanced.config';
-// import { ExtendPackages } from './seed.config.interfaces';
+import { ExtendPackages } from './seed.config.interfaces';
 
 /**
  * This class extends the basic seed configuration, allowing for project specific overrides. A few examples can be found
@@ -9,7 +9,7 @@ import { SeedAdvancedConfig } from './seed-advanced.config';
 export class ProjectConfig extends SeedAdvancedConfig {
 
   PROJECT_TASKS_DIR = join(process.cwd(), this.TOOLS_DIR, 'tasks', 'project');
-  
+
   constructor() {
     super();
     // this.APP_TITLE = 'Put name of your app here';
@@ -37,18 +37,27 @@ export class ProjectConfig extends SeedAdvancedConfig {
 
     this.ROLLUP_NAMED_EXPORTS = [
       ...this.ROLLUP_NAMED_EXPORTS,
-      //{'node_modules/immutable/dist/immutable.js': [ 'Map' ]},
+      //{'node_modules/immutable/dist/immutable.js': [ 'Map', 'List' ]},
     ];
 
     // Add packages (e.g. ng2-translate)
     // ng2-translate is already added with the advanced seed - here for example only
-    // let additionalPackages: ExtendPackages[] = [{
-    //   name: 'ng2-translate',
-    //   // Path to the package's bundle
-    //   path: 'node_modules/ng2-translate/bundles/ng2-translate.umd.js'
-    // }];
-    //
-    // this.addPackagesBundles(additionalPackages);
+    let additionalPackages: ExtendPackages[] = [
+      {
+        name: 'immutable',
+        path: 'node_modules/immutable/dist/immutable.js',
+      },
+      {
+        name: 'three',
+        path: 'node_modules/three/build/three.js',
+      },
+      {
+        name: 'stats.js',
+        path: 'node_modules/stats.js/build/stats.min.js',
+      },
+    ];
+
+    this.addPackagesBundles(additionalPackages);
 
     /* Add proxy middleware */
     // this.PROXY_MIDDLEWARE = [
