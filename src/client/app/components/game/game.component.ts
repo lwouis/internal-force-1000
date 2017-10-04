@@ -33,6 +33,17 @@ export class GameComponent implements OnInit {
     return mesh;
   }
 
+  // TODO remove unused Angular components
+  // TODO introduce Level class to handle scene setup and tearDown
+  // TODO introduce Boss class to handle attack patterns and HP thresholds (with timers?)
+  // TODO introduce Projectile class to handle damage
+  // TODO introduce HUD class to handle HP bars
+  // TODO add Highscore view after game over
+  // TODO add start menu with: Play, Highscore
+  // TODO add music
+  // TODO add FX
+  // TODO add power-ups? (lasers upgrade, bomb to clear screen, invulnerability, etc)
+
   constructor(private store: Store<IAppState>, private element: ElementRef) {}
 
   ngOnInit() {
