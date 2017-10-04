@@ -15,7 +15,9 @@ import { Config } from '../modules/core/utils/index';
 @Component({
   moduleId: module.id,
   selector: 'sd-app',
-  templateUrl: 'app.component.html'
+  templateUrl: 'app.component.html',
+  styleUrls: ['app.component.css']
+
 })
 export class AppComponent {
   constructor(

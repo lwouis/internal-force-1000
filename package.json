@@ -1,10 +1,5 @@
 {
-  "name": "angular-seed-advanced",
-  "version": "0.0.0",
-  "description": "High-quality, modular starter (advanced seed) project for Angular 2 apps with statically typed build and AoT + NativeScript + Electron",
-  "repository": {
-    "url": "https://github.com/NathanWalker/angular-seed-advanced"
-  },
+  "private": true,
   "scripts": {
     "build.desktop.mac": "rimraf desktop/mac/* && gulp desktop.mac --desktop --desktopBuild",
     "build.desktop.windows": "rimraf desktop/windows/* && gulp desktop.windows --desktop --desktopBuild",
@@ -60,13 +55,6 @@
     "compodoc": "./node_modules/.bin/compodoc -p src/client/tsconfig.json",
     "serve.compodoc": "./node_modules/.bin/compodoc -s"
   },
-  "author": "Minko Gechev <mgechev>",
-  "contributors": [
-    {
-      "name": "Nathan Walker <NathanWalker>"
-    }
-  ],
-  "license": "MIT",
   "devDependencies": {
     "@angular/compiler-cli": "~4.1.0",
     "@angular/platform-server": "~4.1.0",
@@ -91,8 +79,8 @@
     "@types/run-sequence": "^0.0.29",
     "@types/selenium-webdriver": "^3.0.3",
     "@types/systemjs": "^0.19.31",
+    "@types/three": "^0.84.25",
     "@types/yargs": "^6.5.0",
-    "@types/zone.js": "^0.5.12",
     "async": "^2.1.1",
     "autoprefixer": "^7.0.1",
     "browser-sync": "^2.17.3",
@@ -103,7 +91,7 @@
     "deep-extend": "^0.4.1",
     "electron-connect": "^0.4.2",
     "electron-debug": "^1.0.0",
-    "electron-prebuilt": "^1.2.1",
+    "electron": "^1.2.1",
     "event-stream": "^3.3.4",
     "express": "~4.15.2",
     "express-history-api-fallback": "^2.0.0",
@@ -185,15 +173,19 @@
     "@ngrx/store": "^2.2.2",
     "@ngx-translate/core": "~7.0.0",
     "@ngx-translate/http-loader": "0.1.0",
+    "@types/stats.js": "^0.16.1",
     "angulartics2": "^2.2.1",
     "core-js": "^2.4.1",
     "es-module-loader": "^1.0.0",
+    "immutable": "^3.8.2",
     "intl": "^1.2.5",
     "lodash": "^4.17.4",
     "minimatch": "^3.0.3",
     "reflect-metadata": "^0.1.8",
     "rxjs": "~5.2.0",
+    "stats.js": "^0.17.0",
     "systemjs": "0.19.41",
+    "three": "0.87.1",
     "zone.js": "^0.8.7"
   }
 }
