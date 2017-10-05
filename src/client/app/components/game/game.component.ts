@@ -170,6 +170,12 @@ export class GameComponent implements OnInit {
         p.move();
         return p;
       })
-      .filter(p => this.frustum.intersectsObject(p.mesh));
+      .filter(p => {
+        let isInFrustrum = this.frustum.intersectsObject(p.mesh);
+        if (!isInFrustrum) {
+          this.scene.remove(p.mesh);
+        }
+        return isInFrustrum;
+      });
   }
 }
