@@ -1,5 +1,5 @@
 // libs
-import {Component, ElementRef, HostListener, OnInit, ViewChild} from '@angular/core';
+import {AfterViewInit, Component, ElementRef, HostListener, OnInit, ViewChild} from '@angular/core';
 import {Store} from '@ngrx/store';
 import {Observable} from 'rxjs/Observable';
 // app
@@ -13,6 +13,9 @@ import {Helpers} from './classes/helpers';
 import {Projectile} from './classes/projectile';
 import {Boss} from './classes/boss';
 import {ProjectilesSpawner} from './classes/projectiles-spawner';
+import {BehaviorSubject} from 'rxjs/BehaviorSubject';
+import {Subject} from 'rxjs/Subject';
+import {Scheduler} from 'rxjs/Rx';
 
 @Component({
   moduleId: module.id,
@@ -20,7 +23,7 @@ import {ProjectilesSpawner} from './classes/projectiles-spawner';
   templateUrl: 'game.component.html',
   styleUrls: ['game.component.css'],
 })
-export class GameComponent implements OnInit {
+export class GameComponent implements OnInit, AfterViewInit {
   @ViewChild('canvas') canvas: ElementRef;
 
   names$: Observable<any>;
@@ -33,6 +36,9 @@ export class GameComponent implements OnInit {
   private controls: Controls;
   private projectiles: List<Projectile>;
   private frustum: Frustum;
+  private resize$: Subject;
+  private keyup$: Observable;
+  private keydown$: Observable;
 
   // TODO remove unused Angular components
   // TODO introduce Level class to handle scene setup and tearDown
@@ -54,30 +60,93 @@ export class GameComponent implements OnInit {
     this.resize();
   }
 
+  ngAfterViewInit() {
+    this.keyup$ = Observable.fromEvent(this.canvas.nativeElement, 'keyup');
+    this.keyup$.subscribe((event: KeyboardEvent) => {
+      if (event.key === Key.ArrowLeft || event.key === Key.ArrowRight) {
+        this.controls.keyboardInputs = List<KeyName>(this.controls.keyboardInputs.filterNot(e => e === event.key));
+      }
+    });
+
+    this.keydown$ = Observable.fromEvent(this.canvas.nativeElement, 'keydown');
+    this.keydown$.subscribe((event: KeyboardEvent) => {
+      if (event.key === Key.ArrowLeft || event.key === Key.ArrowRight) {
+        if (event.key !== this.controls.keyboardInputs.last()) {
+          this.controls.keyboardInputs = this.controls.keyboardInputs.push(event.key);
+        }
+      }
+    });
+
+    this.resize$ = new Subject();
+    this.resize$.subscribe(() => {
+      if (this.camera && this.renderer) {
+        const width = this.element.nativeElement.offsetWidth;
+        const height = this.element.nativeElement.offsetHeight;
+        this.camera.aspect = width / height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(width, height);
+        this.frustum = new Frustum().setFromMatrix(new Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
+      }
+    });
+
+    const increaseButton = document.querySelector('#increase');
+    const increase = this.keyup$
+      .map(() => state => state.update('count', count => count + 1));
+
+    const decreaseButton = document.querySelector('#decrease');
+    const decrease = Observable
+      .fromEvent(decreaseButton, 'click')
+      .map(() => state => state.update('count', count => count - 1));
+
+    const inputElement = document.querySelector('#input');
+    const input = Observable
+      .fromEvent(inputElement, 'input')
+      .map(event => state => state.set('count', event.target.value));
+
+    const clock = Observable
+      .interval(0, Scheduler.animationFrame)
+      .scan(
+        previous => {
+          const time = performance.now();
+          return previous.merge({
+            time,
+            delta: time - previous.get('time'),
+          });
+        },
+        Immutable.fromJS({
+          time: performance.now(),
+          delta: 0,
+        }),
+      );
+
+    const initialState = Immutable.fromJS({
+      count: 0,
+      inputValue: '',
+    });
+
+    const state = Observable
+      .merge(increase, decrease, input)
+      .scan((state, changeFn) => changeFn(state), initialState);
+
+    const loop = clock.withLatestFrom(state, (clock, state) => ({clock, state}));
+
+    loop.subscribe(({clock, state}) => {
+      document.querySelector('#count').innerHTML = state.get('count');
+      document.querySelector('#hello').innerHTML = `Hello ${state.get(
+        'inputValue',
+      )}`;
+    });
+
+    loop.sampleTime(250, Scheduler.animationFrame).subscribe(({clock}) => {
+      document.querySelector('#clock').innerHTML = `${Math.round(
+        clock.get('delta') * 1000,
+      )}μs`;
+    });
+  }
+
   @HostListener('window:resize')
   resize() {
-    if (this.camera && this.renderer) {
-      const width = this.element.nativeElement.offsetWidth;
-      const height = this.element.nativeElement.offsetHeight;
-      this.camera.aspect = width / height;
-      this.camera.updateProjectionMatrix();
-      this.renderer.setSize(width, height);
-      this.frustum = new Frustum().setFromMatrix(new Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse));
-    }
-  }
-
-  keyDown(event: KeyboardEvent) {
-    if (event.key === Key.ArrowLeft || event.key === Key.ArrowRight) {
-      if (event.key !== this.controls.keyboardInputs.last()) {
-        this.controls.keyboardInputs = this.controls.keyboardInputs.push(event.key);
-      }
-    }
-  }
-
-  keyUp(event: KeyboardEvent) {
-    if (event.key === Key.ArrowLeft || event.key === Key.ArrowRight) {
-      this.controls.keyboardInputs = List<KeyName>(this.controls.keyboardInputs.filterNot(e => e === event.key));
-    }
+    this.resize$.next();
   }
 
   private init() {
