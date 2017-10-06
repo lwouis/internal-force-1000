@@ -6,13 +6,13 @@ import {Observable} from 'rxjs/Observable';
 import {getNames, IAppState} from '../../modules/ngrx/index';
 import * as Stats from 'stats.js/build/stats.min';
 import {List} from 'immutable';
-import {Frustum, Matrix4, PerspectiveCamera, Scene, WebGLRenderer} from 'three';
+import {Color, Frustum, Matrix4, PerspectiveCamera, Scene, SceneUtils, WebGLRenderer} from 'three';
 import {Ship} from './classes/ship';
 import {Controls, Key, KeyName} from './classes/controls';
 import {Helpers} from './classes/helpers';
 import {Projectile} from './classes/projectile';
-import {RepeatingTimer} from './classes/repeating-timer';
 import {Boss} from './classes/boss';
+import {ProjectilesSpawner} from './classes/projectiles-spawner';
 
 @Component({
   moduleId: module.id,
@@ -119,21 +119,31 @@ export class GameComponent implements OnInit {
   }
 
   private initBoss() {
-    this.boss = new Boss(Helpers.boxMesh(0xb22323, {x: 2, y: 2, z: 2}, {x: 0, y: 10, z: 0}));
-    new RepeatingTimer(100, () => {
-      let firedProjectile = this.boss.firedProjectile();
-      this.scene.add(firedProjectile.mesh);
-      this.projectiles = this.projectiles.push(firedProjectile);
-    }).start();
+    let position = {x: 0, y: 10, z: 0};
+    this.boss = new Boss(
+      Helpers.boxMesh(new Color(0xb22323), {x: 2, y: 2, z: 2}, position),
+      0.3,
+      new ProjectilesSpawner(
+        100,
+        Helpers.boxMesh(new Color(0xb22323), {x: 0.5, y: 0.5, z: 0.5}, position),
+        0.5,
+        p => {
+          this.projectiles = this.projectiles.push(p);
+          this.scene.add(p.mesh);
+        },
+      ));
+    this.boss.projectilesSpawner.start();
   }
 
   private initShip() {
-    this.ship = new Ship(Helpers.boxMesh(0x144091, {x: 1, y: 1, z: 1}, {x: 0, y: -10, z: 0}), 0.3);
-    new RepeatingTimer(100, () => {
-      let firedProjectile = this.ship.firedProjectile();
-      this.scene.add(firedProjectile.mesh);
-      this.projectiles = this.projectiles.push(firedProjectile);
-    }).start();
+    let position = {x: 0, y: -10, z: 0};
+    let projectilesSpawner = new ProjectilesSpawner(100, Helpers.boxMesh(new Color(0x144091), {x: 0.5, y: 0.5, z: 0.5}, position), 0.5, p => {
+      this.projectiles = this.projectiles.push(p);
+      this.scene.add(p.mesh);
+    });
+    console.log(this.scene);
+    this.ship = new Ship(Helpers.boxMesh(new Color(0x144091), {x: 1, y: 1, z: 1}, position), 0.3, projectilesSpawner);
+    this.ship.projectilesSpawner.start();
   }
 
   private initControls() {

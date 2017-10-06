@@ -7,7 +7,7 @@ export class RepeatingTimer {
 
   start () {
     this.timerId = window.setInterval(this.callback, this.delay);
-  };
+  }
 
   stop() {
     window.clearInterval(this.timerId);
