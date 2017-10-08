@@ -7,8 +7,9 @@ export class ProjectilesSpawner {
   private timer: RepeatingTimer;
 
   constructor(interval: Milliseconds, public mesh: Mesh, speed: number, callback: (p: Projectile) => any) {
+    mesh.visible = false;
     this.timer = new RepeatingTimer(interval, () => {
-      callback(new Projectile(Helpers.boxMesh((this.mesh.material as MeshBasicMaterial).color, {x: 0.5, y: 0.5, z: 0.5}, this.mesh.position), speed));
+      callback(new Projectile(Helpers.boxMeshWithPosition((this.mesh.material as MeshBasicMaterial).color, {x: 0.5, y: 0.5, z: 0.5}, this.mesh.getWorldPosition()), speed));
     });
   }
 

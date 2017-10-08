@@ -1,11 +1,12 @@
-import {Mesh} from 'three';
+import {Mesh, Scene} from 'three';
 import {ProjectilesSpawner} from './projectiles-spawner';
 
 export class Ship {
-  constructor(public mesh: Mesh, private speed: number, public projectilesSpawner: ProjectilesSpawner) {
-    this.mesh.name = 'ship';
+  constructor(scene: Scene, public mesh: Mesh, private speed: number, public projectilesSpawner: ProjectilesSpawner) {
+    mesh.name = 'ship';
     projectilesSpawner.mesh.name = 'projectilesSpawner';
-    this.mesh.add(projectilesSpawner.mesh);
+    scene.add(mesh);
+    mesh.add(projectilesSpawner.mesh);
   }
 
   move(direction: number): void {

@@ -8,10 +8,8 @@ export class Key {
 }
 
 export class Controls {
-  constructor(public keyboardInputs: List<KeyName>) {}
-
-  currentDirection(): number {
-    const lastKeyDown = this.keyboardInputs.last();
+  static currentDirection(keyboardInputs: List<KeyName>): number {
+    const lastKeyDown = keyboardInputs.last();
     if (lastKeyDown === Key.ArrowLeft) {
       return -1;
     } else if (lastKeyDown === Key.ArrowRight) {
