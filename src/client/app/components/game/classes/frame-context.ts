@@ -5,4 +5,5 @@ export type FrameContext = {
   time?: number;
   delta?: number;
   keysDown?: List<KeyName>;
+  needResize?: boolean;
 }
