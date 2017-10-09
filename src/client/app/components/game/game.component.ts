@@ -71,14 +71,14 @@ export class GameComponent implements AfterViewInit {
     const clock$ = Observable.interval(0, Scheduler.animationFrame)
       .map(() => state => {
         const time = performance.now();
-        return Object.assign(state, {
+        return Object.assign({}, state, {
           time: time,
           delta: time - state.time,
         });
       })
       .scan((state, reducer) => reducer(state), {time: performance.now(), delta: 0} as FrameContext);
     return clock$.withLatestFrom(controls$, resize$, (timeAndDelta, keysDown, needResize) =>
-      Object.assign(timeAndDelta, {
+      Object.assign({}, timeAndDelta, {
         keysDown: keysDown,
         needResize: needResize,
       }) as FrameContext);
