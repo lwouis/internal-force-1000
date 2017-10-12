@@ -1,4 +1,4 @@
-import {BoxGeometry, Color, Geometry, JSONLoader, Material, Mesh, MeshBasicMaterial, Object3D, ObjectLoader, Vector3} from 'three';
+import {AnimationClip, BoxGeometry, Color, Mesh, MeshBasicMaterial, ObjectLoader, Vector3} from 'three';
 
 type Scale = { x: number, y: number, z: number };
 
@@ -13,11 +13,11 @@ export class Helpers {
     return new Mesh(new BoxGeometry(scale.x, scale.y, scale.z), new MeshBasicMaterial({color: color}));
   }
 
-  static async sceneLoader(url: string): Promise<any> {
-    return new Promise((resolve, reject) => {
+  static async sceneLoader(url: string): Promise<[Mesh, AnimationClip]> {
+    return new Promise<[Mesh, AnimationClip]>((resolve, reject) => {
       new ObjectLoader().load(url,
-        (object3d) => resolve(object3d),
-        event => {},
+        (sceneObject: any) => resolve([sceneObject.children[0], sceneObject.animations[0]]),
+        (event: any) => {},
         (event: any) => {
           // typescript signatures are misleading as this is not a ErrorEvent
           event.target.status !== 200 ? reject(event.target.response) : reject(event);

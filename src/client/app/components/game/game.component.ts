@@ -4,10 +4,7 @@ import {Observable} from 'rxjs/Observable';
 // app
 import * as Stats from 'stats.js/build/stats.min';
 import {List} from 'immutable';
-import {
-  Color, Frustum, JSONLoader, Matrix4, Mesh, PerspectiveCamera, Scene, Vector3, WebGLRenderer, AnimationMixer, Geometry,
-  AnimationClip,
-} from 'three';
+import {AnimationMixer, Color, Frustum, Matrix4, Mesh, PerspectiveCamera, Scene, Vector3, WebGLRenderer, AmbientLight,} from 'three';
 import {Ship} from './classes/ship';
 import {Controls, Key, KeyName} from './classes/controls';
 import {Helpers} from './classes/helpers';
@@ -71,12 +68,13 @@ export class GameComponent implements AfterViewInit {
   }
 
   private static animationFrame$(controls$: Observable<List<KeyName>>, resize$: BehaviorSubject<boolean>): Observable<FrameContext> {
-    const clock$ = Observable.interval(0, Scheduler.animationFrame)
+    // TODO 1/60 is a workaround as Scheduler.animationFrame seems to have a bug and hits 120hz on my 60hz monitor
+    const clock$ = Observable.interval(1000 / 60, Scheduler.animationFrame)
       .map(() => state => {
         const time = performance.now();
         return Object.assign({}, state, {
           time: time,
-          delta: time - state.time,
+          delta: (time - state.time) / 1000,
         });
       })
       .scan((state, reducer) => reducer(state), {time: performance.now(), delta: 0} as FrameContext);
@@ -91,12 +89,11 @@ export class GameComponent implements AfterViewInit {
     const renderer = this.initialRenderer();
     const stats = this.initialStats();
     const scene = new Scene();
+    scene.add(new AmbientLight(0x404040));
     const camera = GameComponent.initialCamera(scene);
     const frustum = new Frustum();
-    const ship = GameComponent.initialShip(scene);
-    const [boss, animations] = await GameComponent.initialBoss(scene);
-    const mixer = new AnimationMixer(boss.mesh);
-    animations.forEach(clip => mixer.clipAction(clip).play());
+    const [boss, mixer] = await GameComponent.initialBoss(scene, 'assets/blender/boss.json');
+    const ship = await GameComponent.initialShip(scene, 'assets/blender/ship.json');
     this.projectiles = List<Projectile>();
     ship.projectilesSpawner.projectiles$.subscribe(projectile => {
       this.projectiles = this.projectiles.push(projectile);
@@ -123,39 +120,30 @@ export class GameComponent implements AfterViewInit {
 
   private static initialCamera(scene: Scene): PerspectiveCamera {
     const camera = new PerspectiveCamera(75, 16 / 9, 0.1, 1000);
-    camera.position.z = 20;
+    camera.position.y = -20;
     camera.lookAt(scene.position);
     camera.updateMatrixWorld(false);
     camera.matrixAutoUpdate = false;
     return camera;
   }
 
-  private static async initialBoss(scene: Scene): Promise<[Boss, AnimationClip[]]> {
-    // let position = new Vector3(0, 10, 0);
-    // const boss = new Boss(
-    //   Helpers.boxMeshWithPosition(new Color(0xb22323), {x: 2, y: 2, z: 2}, position),
-    //   0.3,
-    //   new ProjectilesSpawner(
-    //     100,
-    //     Helpers.boxMeshWithPosition(new Color(0xb22323), {x: 0.5, y: 0.5, z: 0.5}, position),
-    //     0.5,
-    //   ));
-    const sceneObject = await Helpers.sceneLoader('assets/blender/boss.json') as any;
-    const object = sceneObject.children[0] as Mesh;
-    const mesh = new Mesh(object.geometry, object.material);
-    scene.add(mesh);
-    console.log(sceneObject);
-    return [new Boss(mesh, 0.3, new ProjectilesSpawner(
+  private static async initialBoss(scene: Scene, url: string): Promise<[Boss, AnimationMixer]> {
+    const [bossMesh, bossAnimation] = await Helpers.sceneLoader(url);
+    scene.add(bossMesh);
+    const mixer = new AnimationMixer(bossMesh);
+    mixer.clipAction(bossAnimation).play();
+    const boss = new Boss(bossMesh, 0.3, new ProjectilesSpawner(
       100,
       Helpers.boxMeshWithPosition(new Color(0xb22323), {x: 0.5, y: 0.5, z: 0.5}, new Vector3(0, 10, 0)),
       0.5,
-    )), sceneObject.animations];
+    ));
+    return [boss, mixer];
   }
 
-  private static initialShip(scene: Scene): Ship {
+  private static async initialShip(scene: Scene, url: string): Promise<Ship> {
+    const [shipMesh, _] = await Helpers.sceneLoader('assets/blender/ship.json');
     const projectileSpawnerMesh = Helpers.boxMesh(new Color(0xb22323), {x: 2, y: 2, z: 2});
     let projectilesSpawner = new ProjectilesSpawner(100, projectileSpawnerMesh, 0.5);
-    const shipMesh = Helpers.boxMeshWithPosition(new Color(0x144091), {x: 1, y: 1, z: 1}, new Vector3(0, -10, 0));
     return new Ship(scene, shipMesh, 0.3, projectilesSpawner);
   }
 
