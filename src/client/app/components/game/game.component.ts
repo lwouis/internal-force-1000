@@ -4,7 +4,10 @@ import {Observable} from 'rxjs/Observable';
 // app
 import * as Stats from 'stats.js/build/stats.min';
 import {List} from 'immutable';
-import {Color, Frustum, Matrix4, PerspectiveCamera, Scene, Vector3, WebGLRenderer} from 'three';
+import {
+  Color, Frustum, JSONLoader, Matrix4, Mesh, PerspectiveCamera, Scene, Vector3, WebGLRenderer, AnimationMixer, Geometry,
+  AnimationClip,
+} from 'three';
 import {Ship} from './classes/ship';
 import {Controls, Key, KeyName} from './classes/controls';
 import {Helpers} from './classes/helpers';
@@ -44,8 +47,8 @@ export class GameComponent implements AfterViewInit {
     this.resize$.next(true);
   }
 
-  ngAfterViewInit() {
-    const initialState = this.initialState();
+  async ngAfterViewInit() {
+    const initialState = await this.initialState();
     GameComponent.animationFrame$(this.controls$(), this.resize$)
       .scan((gameState, frameContext) => this.drawLoop(gameState, frameContext), initialState)
       .subscribe();
@@ -84,20 +87,22 @@ export class GameComponent implements AfterViewInit {
       }) as FrameContext);
   }
 
-  private initialState(): GameState {
+  private async initialState(): Promise<GameState> {
     const renderer = this.initialRenderer();
     const stats = this.initialStats();
     const scene = new Scene();
     const camera = GameComponent.initialCamera(scene);
     const frustum = new Frustum();
     const ship = GameComponent.initialShip(scene);
-    const boss = GameComponent.initialBoss(scene);
+    const [boss, animations] = await GameComponent.initialBoss(scene);
+    const mixer = new AnimationMixer(boss.mesh);
+    animations.forEach(clip => mixer.clipAction(clip).play());
     this.projectiles = List<Projectile>();
     ship.projectilesSpawner.projectiles$.subscribe(projectile => {
       this.projectiles = this.projectiles.push(projectile);
       scene.add(projectile.mesh);
     });
-    return new GameState(renderer, stats, scene, camera, frustum, ship, boss);
+    return new GameState(renderer, stats, scene, camera, frustum, ship, boss, mixer);
   }
 
   private initialStats(): any {
@@ -125,18 +130,26 @@ export class GameComponent implements AfterViewInit {
     return camera;
   }
 
-  private static initialBoss(scene: Scene): Boss {
-    let position = new Vector3(0, 10, 0);
-    const boss = new Boss(
-      Helpers.boxMeshWithPosition(new Color(0xb22323), {x: 2, y: 2, z: 2}, position),
-      0.3,
-      new ProjectilesSpawner(
-        100,
-        Helpers.boxMeshWithPosition(new Color(0xb22323), {x: 0.5, y: 0.5, z: 0.5}, position),
-        0.5,
-      ));
-    scene.add(boss.mesh);
-    return boss;
+  private static async initialBoss(scene: Scene): Promise<[Boss, AnimationClip[]]> {
+    // let position = new Vector3(0, 10, 0);
+    // const boss = new Boss(
+    //   Helpers.boxMeshWithPosition(new Color(0xb22323), {x: 2, y: 2, z: 2}, position),
+    //   0.3,
+    //   new ProjectilesSpawner(
+    //     100,
+    //     Helpers.boxMeshWithPosition(new Color(0xb22323), {x: 0.5, y: 0.5, z: 0.5}, position),
+    //     0.5,
+    //   ));
+    const sceneObject = await Helpers.sceneLoader('assets/blender/boss.json') as any;
+    const object = sceneObject.children[0] as Mesh;
+    const mesh = new Mesh(object.geometry, object.material);
+    scene.add(mesh);
+    console.log(sceneObject);
+    return [new Boss(mesh, 0.3, new ProjectilesSpawner(
+      100,
+      Helpers.boxMeshWithPosition(new Color(0xb22323), {x: 0.5, y: 0.5, z: 0.5}, new Vector3(0, 10, 0)),
+      0.5,
+    )), sceneObject.animations];
   }
 
   private static initialShip(scene: Scene): Ship {
@@ -149,8 +162,8 @@ export class GameComponent implements AfterViewInit {
   private drawLoop(gameState: GameState, frameContext: FrameContext): GameState {
     this.resizeIfNeeded(gameState, frameContext);
     gameState.stats.update();
+    gameState.mixer.update(frameContext.delta);
     GameComponent.updateShip(gameState.ship, frameContext.keysDown);
-    GameComponent.updateBoss(gameState.boss);
     this.projectiles = GameComponent.updateProjectiles(this.projectiles, gameState.scene, gameState.frustum);
     gameState.renderer.render(gameState.scene, gameState.camera);
     return gameState;
@@ -167,11 +180,6 @@ export class GameComponent implements AfterViewInit {
         .multiplyMatrices(gameState.camera.projectionMatrix, gameState.camera.matrixWorldInverse));
       this.resize$.next(false);
     }
-  }
-
-  private static updateBoss(boss: Boss) {
-    boss.mesh.rotation.x += 0.01;
-    boss.mesh.rotation.y += 0.01;
   }
 
   private static updateShip(ship: Ship, keysDown: List<KeyName>) {
