@@ -4,7 +4,7 @@ import {Observable} from 'rxjs/Observable';
 // app
 import * as Stats from 'stats.js/build/stats.min';
 import {List} from 'immutable';
-import {AnimationMixer, Color, Frustum, Matrix4, Mesh, PerspectiveCamera, Scene, Vector3, WebGLRenderer, AmbientLight,} from 'three';
+import {AmbientLight, AnimationClip, AnimationMixer, Color, Frustum, Matrix4, Mesh, PerspectiveCamera, Scene, WebGLRenderer,} from 'three';
 import {Ship} from './classes/ship';
 import {Controls, Key, KeyName} from './classes/controls';
 import {Helpers} from './classes/helpers';
@@ -45,9 +45,8 @@ export class GameComponent implements AfterViewInit {
   }
 
   async ngAfterViewInit() {
-    const initialState = await this.initialState();
     GameComponent.animationFrame$(this.controls$(), this.resize$)
-      .scan((gameState, frameContext) => this.drawLoop(gameState, frameContext), initialState)
+      .scan((gameState, frameContext) => this.drawLoop(gameState, frameContext), await this.initialState())
       .subscribe();
   }
 
@@ -92,14 +91,14 @@ export class GameComponent implements AfterViewInit {
     scene.add(new AmbientLight(0x404040));
     const camera = GameComponent.initialCamera(scene);
     const frustum = new Frustum();
-    const [boss, mixer] = await GameComponent.initialBoss(scene, 'assets/blender/boss.json');
-    const ship = await GameComponent.initialShip(scene, 'assets/blender/ship.json');
+    const ship = await GameComponent.initialShip(scene);
     this.projectiles = List<Projectile>();
     ship.projectilesSpawner.projectiles$.subscribe(projectile => {
       this.projectiles = this.projectiles.push(projectile);
       scene.add(projectile.mesh);
     });
-    return new GameState(renderer, stats, scene, camera, frustum, ship, boss, mixer);
+    const bossAssets = await Promise.all(['assets/blender/boss.json'].map(url => Helpers.sceneLoader(url)));
+    return new GameState(renderer, stats, scene, camera, frustum, ship, bossAssets, undefined, undefined);
   }
 
   private initialStats(): any {
@@ -127,20 +126,15 @@ export class GameComponent implements AfterViewInit {
     return camera;
   }
 
-  private static async initialBoss(scene: Scene, url: string): Promise<[Boss, AnimationMixer]> {
-    const [bossMesh, bossAnimation] = await Helpers.sceneLoader(url);
-    scene.add(bossMesh);
-    const mixer = new AnimationMixer(bossMesh);
-    mixer.clipAction(bossAnimation).play();
-    const boss = new Boss(bossMesh, 0.3, new ProjectilesSpawner(
-      100,
-      Helpers.boxMeshWithPosition(new Color(0xb22323), {x: 0.5, y: 0.5, z: 0.5}, new Vector3(0, 10, 0)),
-      0.5,
-    ));
+  private static spawnBoss(id: number, scene: Scene, assets: [Mesh, AnimationClip]): [Boss, AnimationMixer] {
+    const boss = new Boss(id, assets[0]);
+    scene.add(assets[0]);
+    const mixer = new AnimationMixer(assets[0]);
+    mixer.clipAction(assets[1]).play();
     return [boss, mixer];
   }
 
-  private static async initialShip(scene: Scene, url: string): Promise<Ship> {
+  private static async initialShip(scene: Scene): Promise<Ship> {
     const [shipMesh, _] = await Helpers.sceneLoader('assets/blender/ship.json');
     const projectileSpawnerMesh = Helpers.boxMesh(new Color(0xb22323), {x: 2, y: 2, z: 2});
     let projectilesSpawner = new ProjectilesSpawner(100, projectileSpawnerMesh, 0.5);
@@ -150,11 +144,49 @@ export class GameComponent implements AfterViewInit {
   private drawLoop(gameState: GameState, frameContext: FrameContext): GameState {
     this.resizeIfNeeded(gameState, frameContext);
     gameState.stats.update();
+    if (gameState.boss === undefined || gameState.boss.health <= 0) {
+      const bossId = gameState.boss === undefined ? 0 : gameState.boss.id + 1;
+      const [boss, mixer] = GameComponent.spawnBoss(bossId, gameState.scene, gameState.bossesAssets[0]);
+      gameState.boss = boss;
+      gameState.mixer = mixer;
+    }
     gameState.mixer.update(frameContext.delta);
+    gameState.boss.mesh.geometry.boundingBox.setFromObject(gameState.boss.mesh);
     GameComponent.updateShip(gameState.ship, frameContext.keysDown);
-    this.projectiles = GameComponent.updateProjectiles(this.projectiles, gameState.scene, gameState.frustum);
+    [this.projectiles, gameState.boss, gameState.scene] = GameComponent.updateProjectiles(this.projectiles, gameState.scene, gameState.frustum, gameState.boss);
     gameState.renderer.render(gameState.scene, gameState.camera);
     return gameState;
+  }
+
+  private static updateShip(ship: Ship, keysDown: List<KeyName>) {
+    if (!keysDown.isEmpty()) {
+      ship.move(Controls.currentDirection(keysDown));
+    }
+  }
+
+  private static updateProjectiles(projectiles: List<Projectile>, scene: Scene, frustum: Frustum, boss: Boss): [List<Projectile>, Boss, Scene] {
+    return projectiles
+      .reduce(([projectilesLeft, boss, scene], projectile) => {
+        if (frustum.intersectsObject(projectile.mesh)) {
+          if (projectile.mesh.geometry.boundingBox.intersectsBox(boss.mesh.geometry.boundingBox)) {
+            console.log('boss.damaged');
+            return [projectilesLeft, boss.damaged(), GameComponent.sceneWithoutMesh(scene, projectile.mesh)];
+          } else {
+            console.log('projectile.move');
+            projectile.move();
+            return [projectilesLeft.push(projectile), boss, scene];
+          }
+        } else {
+          console.log('projectile.out');
+          return [projectilesLeft, boss, GameComponent.sceneWithoutMesh(scene, projectile.mesh)];
+        }
+      }, [List<Projectile>(), boss, scene] as any);
+  }
+
+  private static sceneWithoutMesh(scene: Scene, mesh: Mesh) {
+    // TODO how to handle scene as immutable?
+    scene.remove(mesh);
+    return scene;
   }
 
   private resizeIfNeeded(gameState: GameState, frameContext: FrameContext) {
@@ -168,27 +200,5 @@ export class GameComponent implements AfterViewInit {
         .multiplyMatrices(gameState.camera.projectionMatrix, gameState.camera.matrixWorldInverse));
       this.resize$.next(false);
     }
-  }
-
-  private static updateShip(ship: Ship, keysDown: List<KeyName>) {
-    if (!keysDown.isEmpty()) {
-      ship.move(Controls.currentDirection(keysDown));
-    }
-  }
-
-  private static updateProjectiles(projectiles: List<Projectile>, scene: Scene, frustum: Frustum): List<Projectile> {
-    return projectiles
-      .map(p => {
-        p.move();
-        p.mesh.geometry.computeBoundingSphere();
-        return p;
-      })
-      .filter(p => {
-        let isInFrustum = frustum.intersectsObject(p.mesh);
-        if (!isInFrustum) {
-          scene.remove(p.mesh);
-        }
-        return isInFrustum;
-      });
   }
 }
